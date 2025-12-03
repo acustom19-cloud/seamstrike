@@ -1,22 +1,22 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { LeagueSettings, Player, Screen, Standing, SubscriptionTier, ScheduleEvent, TeamProfile } from './types';
+import type { LeagueSettings, Player, Screen, Standing, SubscriptionTier, ScheduleEvent, TeamProfile } from './types';
 import { INITIAL_LEAGUE_SETTINGS, MOCK_ROSTER, LEAGUE_LEVELS, MOCK_STANDINGS, MOCK_SCHEDULE, MOCK_TEAMS } from './constants';
-import GameMode from './components/GameMode.tsx';
-import RosterManager from './components/RosterManager.tsx';
-import LineupBuilder from './components/LineupBuilder.tsx';
-import DefenseBuilder from './components/DefenseBuilder.tsx';
-import PracticePlanner from './components/PracticePlanner.tsx';
-import HelpFAQ from './components/HelpFAQ.tsx';
-import CoachesChat from './components/CoachesChat.tsx';
-import ScheduleManager from './components/ScheduleManager.tsx';
-import SubscriptionManager from './components/SubscriptionManager.tsx';
-import InfoTooltip from './components/InfoTooltip.tsx';
-import SeamStrikeLogo from './components/SeamStrikeLogo.tsx';
-import TeamOverview from './components/TeamOverview.tsx';
-import VideoAnalyzer from './components/VideoAnalyzer.tsx';
-import LoginScreen from './components/LoginScreen.tsx';
-import AccountManager from './components/AccountManager.tsx';
+import GameMode from './components/GameMode';
+import RosterManager from './components/RosterManager';
+import LineupBuilder from './components/LineupBuilder';
+import DefenseBuilder from './components/DefenseBuilder';
+import PracticePlanner from './components/PracticePlanner';
+import HelpFAQ from './components/HelpFAQ';
+import CoachesChat from './components/CoachesChat';
+import ScheduleManager from './components/ScheduleManager';
+import SubscriptionManager from './components/SubscriptionManager';
+import InfoTooltip from './components/InfoTooltip';
+import SeamStrikeLogo from './components/SeamStrikeLogo';
+import TeamOverview from './components/TeamOverview';
+import VideoAnalyzer from './components/VideoAnalyzer';
+import LoginScreen from './components/LoginScreen';
+import AccountManager from './components/AccountManager';
+import { supabase } from './services/supabaseClient';
 import { 
   LayoutDashboard, 
   Users, 
@@ -26,7 +26,6 @@ import {
   ClipboardList, 
   Menu, 
   X,
-  Trophy,
   Upload,
   Image as ImageIcon,
   CalendarDays,
@@ -42,17 +41,15 @@ import {
   UserCircle
 } from 'lucide-react';
 
-// Simple Scouting Component
+// Simple Scouting Component (kept inline for brevity)
 const ScoutingReport = ({ league }: { league: LeagueSettings }) => {
   const [notes, setNotes] = useState("");
   const [report, setReport] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // Dynamic import or keeping logic inside here for simplicity since it's just one service call
   const handleScout = async () => {
     setLoading(true);
-    // Use the service defined earlier
-    const { getScoutingReport } = await import('./services/geminiService.ts');
+    const { getScoutingReport } = await import('./services/geminiService');
     const res = await getScoutingReport(notes, league);
     setReport(res);
     setLoading(false);
@@ -238,16 +235,64 @@ const SettingsScreen = ({ league, setLeague, darkMode, setDarkMode }: SettingsSc
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState({ name: 'Coach Smith', email: 'coach@example.com' });
+  const [userProfile, setUserProfile] = useState({ name: '', email: '' });
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>(INITIAL_LEAGUE_SETTINGS);
+  
+  // Data State - Initially Mock, can be replaced with real Supabase data later
   const [roster, setRoster] = useState<Player[]>([...MOCK_ROSTER]);
   const [standings, setStandings] = useState<Standing[]>([...MOCK_STANDINGS]);
   const [schedule, setSchedule] = useState<ScheduleEvent[]>([...MOCK_SCHEDULE]);
+  const [availableTeams] = useState<TeamProfile[]>(MOCK_TEAMS);
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>('Free');
   const [darkMode, setDarkMode] = useState(false);
-  const [availableTeams, setAvailableTeams] = useState<TeamProfile[]>(MOCK_TEAMS);
+
+  // Authentication Check (Supabase)
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsAuthenticated(true);
+        loadUserProfile(session.user.id);
+      }
+    });
+
+    // Listen for changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsAuthenticated(true);
+        loadUserProfile(session.user.id);
+      } else {
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadUserProfile = async (userId: string) => {
+      try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+          
+          if (data) {
+              setUserProfile({ name: data.full_name || 'Coach', email: data.email });
+              setSubscriptionTier(data.subscription_tier as SubscriptionTier || 'Free');
+              // Here you would also load the user's real teams/roster in the future
+          } else {
+              // Fallback if profile creation trigger hasn't fired yet
+              const { data: userData } = await supabase.auth.getUser();
+              setUserProfile({ name: 'Coach', email: userData.user?.email || '' });
+          }
+      } catch (e) {
+          console.error("Error loading profile", e);
+      }
+  };
 
   // Apply dark mode class to html element
   useEffect(() => {
@@ -270,12 +315,13 @@ function App() {
   }, []);
 
   const handleLogin = () => {
-    setIsAuthenticated(true);
+    // State handled by auth listener
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentScreen('dashboard');
+    // Clear data or reset to mock if desired
   };
 
   if (!isAuthenticated) {
@@ -299,13 +345,11 @@ function App() {
   ];
 
   const handleSubscriptionUpgrade = (tier: SubscriptionTier) => {
-      // Payment handled in SubscriptionManager modal now
       setSubscriptionTier(tier);
       alert("Welcome to the team! Your Pro features are now unlocked.");
   };
 
   const handleSwitchTeam = (team: TeamProfile) => {
-    // In a real app, this would fetch the specific team's data
     setLeagueSettings(prev => ({
         ...prev,
         name: team.name,
@@ -313,7 +357,6 @@ function App() {
         level: team.level,
         teamLogoUrl: team.logoUrl || prev.teamLogoUrl
     }));
-    // Note: For demo purposes we aren't swapping roster/schedule data arrays completely
   };
 
   const renderContent = () => {
@@ -330,7 +373,7 @@ function App() {
       case 'settings': return <SettingsScreen league={leagueSettings} setLeague={setLeagueSettings} darkMode={darkMode} setDarkMode={setDarkMode} />;
       case 'faq': return <HelpFAQ />;
       case 'subscription': return <SubscriptionManager currentTier={subscriptionTier} onUpgrade={handleSubscriptionUpgrade} sport={leagueSettings.sport} />;
-      case 'account': return <AccountManager user={userProfile} subscriptionTier={subscriptionTier} onUpgrade={handleSubscriptionUpgrade} onLogout={handleLogout} onNavigate={setCurrentScreen} />;
+      case 'account': return <AccountManager user={userProfile} subscriptionTier={subscriptionTier} onLogout={handleLogout} onNavigate={setCurrentScreen} />;
       case 'standings':
             // Redirect to schedule tab (now combined)
             return <ScheduleManager schedule={schedule} setSchedule={setSchedule} standings={standings} setStandings={setStandings} roster={roster} league={leagueSettings} subscriptionTier={subscriptionTier} onUpgrade={handleSubscriptionUpgrade} />;
@@ -410,7 +453,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Season Manager</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Comprehensive schedule & standings hub. Features <strong>AI Calendar Optimization</strong> for fatigue management and integrated <strong>Game Day Weather</strong>.
+                        Comprehensive schedule & standings hub. Features <strong>AI Calendar Optimization</strong>, <strong>Game Day Weather</strong>, and automated travel checks.
                     </p>
                 </div>
 
@@ -423,7 +466,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Smart Lineups</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Build optimized batting orders using <strong>AI Strategies</strong> or the <strong>Interactive Builder</strong>. Visualize power, speed, and defense balance instantly.
+                        Build optimized batting orders with <strong>AI Strategies</strong> or the <strong>Interactive Builder</strong>. Visualize 9-18 player lineups with real-time stats.
                     </p>
                 </div>
                 
@@ -436,7 +479,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Defense Builder</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Generate fair rotations with AI or use the <strong>Manual Grid</strong> with real-time conflict detection for every inning.
+                        Generate fair rotations using <strong>AI</strong> or the <strong>Manual Grid</strong>. Includes real-time conflict detection for every inning.
                     </p>
                 </div>
 
@@ -456,7 +499,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Practice Planner</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Generate opponent-specific team plans or <strong>Individual Workouts</strong> tailored to specific player needs. Download PDFs instantly.
+                        Create custom plans with <strong>Focus Toggles</strong> and <strong>Duration Control</strong>. Generate full team sessions or <strong>Individual Workouts</strong>.
                     </p>
                 </div>
 
@@ -469,7 +512,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Roster Management</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Track advanced metrics (OPS, WHIP), manage depth charts, and visualize performance with <strong>SeamStats™ Spray Charts</strong>.
+                        Track <strong>Advanced Stats</strong> (OPS, FIP), view <strong>SeamStats™</strong> analytics, and manage detailed <strong>Fielding Notes</strong> for Pro strategy.
                     </p>
                 </div>
 
@@ -482,7 +525,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Scouting Reports</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Analyze opponent notes to generate <strong>AI-driven Scouting Reports</strong>. Identify key threats, exploitable weaknesses, and tactical adjustments.
+                        Turn raw notes into <strong>AI-driven Tactical Reports</strong>. Identify key threats, exploitable weaknesses, and defensive adjustments.
                     </p>
                 </div>
 
@@ -502,7 +545,7 @@ function App() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white">Video Analysis</h3>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                        Upload game footage for <strong>AI Mechanical Analysis</strong>. Improve pitching delivery and swing mechanics with frame-by-frame insights.
+                        Upload game footage for <strong>AI Mechanical Analysis</strong>. Improve pitching delivery and swing mechanics with automated drill suggestions.
                     </p>
                 </div>
             </div>
@@ -571,7 +614,7 @@ function App() {
                 </div>
                 <div className="overflow-hidden">
                     <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase truncate">My Account</p>
-                    <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{userProfile.name}</p>
+                    <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{userProfile.name || userProfile.email}</p>
                 </div>
             </div>
         </div>

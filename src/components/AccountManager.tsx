@@ -1,12 +1,11 @@
-
 import React, { useState } from 'react';
-import { SubscriptionTier, Screen } from '../types';
-import { User, Mail, Lock, CreditCard, Shield, FileText, LogOut, Trash2, CheckCircle2, AlertTriangle, ExternalLink, MessageCircle, X } from 'lucide-react';
+import type { SubscriptionTier, Screen } from '../types';
+import { Mail, Lock, CreditCard, Shield, FileText, LogOut, Trash2, CheckCircle2, AlertTriangle, ExternalLink, MessageCircle, X } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface AccountManagerProps {
   user: { name: string; email: string; avatarUrl?: string };
   subscriptionTier: SubscriptionTier;
-  onUpgrade: (tier: SubscriptionTier) => void;
   onLogout: () => void;
   onNavigate: (screen: Screen) => void;
 }
@@ -14,32 +13,42 @@ interface AccountManagerProps {
 const AccountManager: React.FC<AccountManagerProps> = ({ 
   user, 
   subscriptionTier, 
-  onUpgrade, 
   onLogout, 
   onNavigate 
 }) => {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState<'terms' | 'privacy' | null>(null);
-  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [passwordForm, setPasswordForm] = useState({ new: '', confirm: '' });
 
   const isPro = subscriptionTier === 'ProMonthly' || subscriptionTier === 'ProAnnual';
 
-  const handlePasswordUpdate = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordForm.new !== passwordForm.confirm) {
       alert("New passwords do not match.");
       return;
     }
-    alert("Password updated successfully.");
-    setPasswordForm({ current: '', new: '', confirm: '' });
-    setShowPasswordChange(false);
+    
+    const { error } = await supabase.auth.updateUser({ password: passwordForm.new });
+    
+    if (error) {
+        alert("Error updating password: " + error.message);
+    } else {
+        alert("Password updated successfully.");
+        setPasswordForm({ new: '', confirm: '' });
+        setShowPasswordChange(false);
+    }
+  };
+
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
+      onLogout(); // Clears local state in App.tsx
   };
 
   const handleDeleteAccount = () => {
     const confirmation = prompt("To permanently delete your account, type 'DELETE' below. This action cannot be undone.");
     if (confirmation === 'DELETE') {
-      alert("Account deleted.");
-      onLogout();
+      alert("Please contact support@seamstrike.app to finalize account deletion.");
     }
   };
 
@@ -65,7 +74,6 @@ const AccountManager: React.FC<AccountManagerProps> = ({
           <p>You are responsible for maintaining the security of your account and password. SeamStrike cannot and will not be liable for any loss or damage from your failure to comply with this security obligation.</p>
           <h4>3. Data Privacy</h4>
           <p>Your data privacy is important to us. Please review our Privacy Policy to understand how we collect and use your information.</p>
-          {/* Add more mock content to demonstrate scrolling */}
           <div className="h-64"></div>
         </div>
         <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50">
@@ -111,18 +119,12 @@ const AccountManager: React.FC<AccountManagerProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Display Name</label>
-                <input className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" defaultValue={user.name} />
+                <input className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" defaultValue={user.name} disabled />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Email Address</label>
                 <input className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-500 cursor-not-allowed" defaultValue={user.email} disabled />
               </div>
-            </div>
-            
-            <div className="mt-4 flex justify-end">
-              <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors">
-                Save Changes
-              </button>
             </div>
           </div>
 
@@ -144,10 +146,6 @@ const AccountManager: React.FC<AccountManagerProps> = ({
             {showPasswordChange ? (
               <form onSubmit={handlePasswordUpdate} className="space-y-3 animate-in fade-in slide-in-from-top-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Current Password</label>
-                  <input type="password" required className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} />
-                </div>
-                <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">New Password</label>
                   <input type="password" required className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} />
                 </div>
@@ -163,7 +161,7 @@ const AccountManager: React.FC<AccountManagerProps> = ({
               <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
                 <div className="flex items-center text-slate-600 dark:text-slate-300">
                   <Lock className="w-4 h-4 mr-2" />
-                  <span>Password last changed 3 months ago</span>
+                  <span>Password managed securely</span>
                 </div>
               </div>
             )}
@@ -179,7 +177,7 @@ const AccountManager: React.FC<AccountManagerProps> = ({
               Once you delete your account, there is no going back. Please be certain.
             </p>
             <div className="flex space-x-4">
-               <button onClick={onLogout} className="px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center">
+               <button onClick={handleLogout} className="px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center">
                   <LogOut className="w-4 h-4 mr-2" /> Sign Out
                </button>
                <button onClick={handleDeleteAccount} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 flex items-center">
@@ -217,12 +215,6 @@ const AccountManager: React.FC<AccountManagerProps> = ({
               >
                 Upgrade to Pro
               </button>
-            )}
-
-            {isPro && (
-               <div className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                 Next billing date: <strong>October 15, 2024</strong>
-               </div>
             )}
 
             <button className="text-sm text-indigo-600 font-bold hover:underline flex items-center">

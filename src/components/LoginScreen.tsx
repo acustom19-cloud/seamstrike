@@ -1,28 +1,69 @@
-
 import React, { useState } from 'react';
 import SeamStrikeLogo from './SeamStrikeLogo';
-import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: () => void; // App.tsx handles the session state update
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState(""); // Only for sign up
   const [isSignUp, setIsSignUp] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
     
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setErrorMsg("");
+
+    try {
+      if (isSignUp) {
+        // Real Sign Up
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            }
+          }
+        });
+
+        if (error) throw error;
+        
+        // If email confirmation is off in Supabase, this logs them in immediately
+        // If on, you might show a "Check your email" message
+        if (data.session) {
+           onLogin();
+        } else {
+           alert("Account created! Please check your email to confirm.");
+           setIsLoading(false);
+        }
+
+      } else {
+        // Real Sign In
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+        
+        if (data.session) {
+          onLogin();
+        }
+      }
+    } catch (error: any) {
+      console.error("Auth Error:", error);
+      setErrorMsg(error.message || "Authentication failed.");
       setIsLoading(false);
-      onLogin();
-    }, 1500);
+    }
   };
 
   return (
@@ -47,7 +88,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         </div>
 
         <div className="p-8">
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {errorMsg}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Coach Name</label>
+                <input 
+                  type="text" 
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 font-medium transition-all"
+                  placeholder="Coach Name"
+                  required={isSignUp}
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
               <div className="relative">
@@ -98,7 +160,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             <p className="text-slate-500 text-sm">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button 
-                onClick={() => setIsSignUp(!isSignUp)}
+                onClick={() => { setIsSignUp(!isSignUp); setErrorMsg(""); }}
                 className="text-indigo-600 font-bold hover:underline"
               >
                 {isSignUp ? 'Sign In' : 'Sign Up'}
@@ -109,7 +171,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         
         {!isSignUp && (
             <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
-                <button className="text-xs text-slate-400 hover:text-slate-600 font-medium">Forgot Password?</button>
+                <button 
+                  onClick={() => alert("Please check the Supabase dashboard to send password recovery emails.")}
+                  className="text-xs text-slate-400 hover:text-slate-600 font-medium"
+                >
+                  Forgot Password?
+                </button>
             </div>
         )}
       </div>

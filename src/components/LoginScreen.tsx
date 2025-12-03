@@ -76,14 +76,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10">
         <div className="p-8 text-center bg-slate-50 border-b border-slate-100">
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4">
             <SeamStrikeLogo className="w-16 h-16" sport="Baseball" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900">
-            {isSignUp ? 'Join SeamStrike' : 'Welcome Back'}
+          
+          <h1 className="text-4xl font-extrabold text-slate-900 font-varsity tracking-wide mb-1" style={{ fontFamily: "'Yellowtail', cursive" }}>
+            SeamStrike
           </h1>
-          <p className="text-slate-500 mt-2 text-sm">
-            {isSignUp ? 'Start managing your team like a pro.' : 'Sign in to access your team dashboard.'}
+          <p className="text-indigo-600 font-bold text-sm uppercase tracking-wider mb-6">
+            Your AI Coaching Assistant
+          </p>
+
+          <h2 className="text-xl font-bold text-slate-800">
+            {isSignUp ? 'Create Your Account' : 'Welcome Back'}
+          </h2>
+          <p className="text-slate-500 mt-1 text-sm">
+            {isSignUp ? 'Start managing your team like a pro.' : 'Sign in to access your dashboard.'}
           </p>
         </div>
 
